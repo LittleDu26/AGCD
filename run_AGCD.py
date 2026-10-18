@@ -36,7 +36,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.seed = 101
     args.target_size = 5
-    args.threads_num = 20
+    args.threads_num = 8
     args.pop_size = 20
     args.use_attention = True
     args.total_maturity = 25
