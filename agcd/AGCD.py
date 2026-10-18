@@ -39,7 +39,7 @@ def single_agent_fit(agent, ppo_args, trans_args, sample_setting, args, signal):
     # PPO
     ppo = PPO(robot=robot, ppo_size=1, train_iters=args.train_iters, agent=ppoAgent, verbose=True,
               ppo_args=ppo_args, total_step=args.total_step, save_path=args.save_to, device=device,
-              signal=signal, maturity=agent.maturity,use_mfp=args.use_mfp)
+              signal=signal, maturity=agent.maturity,use_lfp=args.use_lfp)
 
     if agent.iteration==0:
         reward_history, agent.iteration, attention,agent.initial_fitness= ppo.train(agent.id, agent.iteration, agent.fitness)
@@ -93,7 +93,7 @@ def muti_running(agents, ppo_args, trans_args, sample_setting, args, signal, ter
             if signal == "evolution" and current_iters + terminal_condition == args.max_iters:
                 continue
             if signal == "evolution":
-                if args.use_mfp:
+                if args.use_lfp:
                     current_iters += args.train_iters
                 else:
                     current_iters += args.total_step
@@ -153,7 +153,7 @@ def run(args):
     fitness_window = []
 
     alloc_list, count = count_elites(args.total_maturity)
-    if args.use_mfp:
+    if args.use_lfp:
         terminal_condition = count * args.train_iters
     else:
         terminal_condition = 0
@@ -204,7 +204,7 @@ def run(args):
             logger.start_elites(pop_agent)
             break
 
-        if args.use_mfp:
+        if args.use_lfp:
             # 非支配排序
             fronts = fast_non_dominated_sort(pop_agent)
 
@@ -232,7 +232,7 @@ def run(args):
 
         generation += 1
 
-    if args.use_mfp:
+    if args.use_lfp:
         # elites train
         elites = get_elites(all_agents, alloc_list)
         elites_windows = []

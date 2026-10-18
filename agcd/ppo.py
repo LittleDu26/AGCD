@@ -14,7 +14,7 @@ import copy
 class PPO:
     def __init__(self, robot=None, train_iters=None, ppo_size=None, agent=None,
                  verbose=True, ppo_args=None, save_path=None, total_step=None,
-                 device=None,signal=False,maturity=None,use_mfp=False):
+                 device=None,signal=False,maturity=None,use_lfp=False):
         self.args = ppo_args
         self.verbose = verbose
         self.agent = agent
@@ -25,13 +25,13 @@ class PPO:
         self.robots_tuple = robot
         self.optimizer = optim.Adam(self.agent.parameters(), lr=self.args.lr, eps=self.args.EPS)
         self.robots = []
-        self.use_mfp = use_mfp
+        self.use_lfp = use_lfp
         for i in range(self.ppo_size):
             self.robots.append(Structure(*robot, i))
         if signal =="elites":
             self.total_step = total_step-maturity*self.train_iters
             self.attention_flag=False
-        elif not use_mfp:
+        elif not use_lfp:
             self.total_step = total_step
             self.attention_flag = True
         else:

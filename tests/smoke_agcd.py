@@ -98,7 +98,7 @@ def run_smoke(output_root, names):
             args = SimpleNamespace(
                 env=name, seed=101, target_size=5, threads_num=2, pop_size=4,
                 total_maturity=2, train_iters=2, total_step=4, max_iters=18,
-                save_to=str(destination), use_attention=True, use_mfp=True,
+                save_to=str(destination), use_attention=True, use_lfp=True,
             )
             (destination / "config.json").write_text(json.dumps(vars(args), indent=2))
             agcd.run(args)
