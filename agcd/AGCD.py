@@ -217,8 +217,10 @@ def run(args):
 
         child_num = args.pop_size - len(Parents)
 
-        # 交叉操作
-        crossover_children = random_guided_crossover(Parents, record, total_crossovers=child_num // 2)
+        # 关闭注意力引导时，仅通过随机变异生成子代
+        crossover_children = []
+        if args.use_attention:
+            crossover_children = random_guided_crossover(Parents, record, total_crossovers=child_num // 2)
 
         # 突变操作
         mutated_children = random_guided_mutate(Parents, record, total_mutations=child_num - len(crossover_children),

@@ -36,13 +36,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.seed = 101
     args.target_size = 5
-    args.threads_num = 8
+    args.threads_num = 20
     args.pop_size = 20
     args.use_attention = True
     args.total_maturity = 25
     args.use_lfp = True
-    env_list= ["Walker-v0","DownStepper-v0"]
-    num=1
+    env_list= ["Walker-v0"]
+    num=5
     for env in env_list:
         max_eva, tc = get_par(env)
         args.env=env
