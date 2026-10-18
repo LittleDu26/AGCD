@@ -148,7 +148,7 @@ def attention_mutate(agent, record, mutation_rate=0.1, num_attempts=25):
     return None
 
 
-def random_guided_mutate(Parents, record, total_mutations=10,use_attention=False,inherit=False):
+def random_guided_mutate(Parents, record, total_mutations=10,use_attention=False):
 
     mutated_children = []
 
@@ -162,9 +162,8 @@ def random_guided_mutate(Parents, record, total_mutations=10,use_attention=False
             child_robot = mutate(Parents[0].robot, record)
         if child_robot is not None:
             new_agent = Agent(child_robot)
-            if inherit:
-                partner_index = get_similar_index(new_agent, Parents)
-                new_agent.controller = Parents[partner_index].best_controller
+            partner_index = get_similar_index(new_agent, Parents)
+            new_agent.controller = copy.deepcopy(Parents[partner_index].best_controller)
             mutated_children.append(new_agent)
     
     
@@ -181,9 +180,8 @@ def random_guided_mutate(Parents, record, total_mutations=10,use_attention=False
 
         if child_robot is not None:
             new_agent = Agent(child_robot)
-            if inherit:
-                partner_index = get_similar_index(new_agent, Parents)
-                new_agent.controller = Parents[partner_index].best_controller
+            partner_index = get_similar_index(new_agent, Parents)
+            new_agent.controller = copy.deepcopy(Parents[partner_index].best_controller)
             mutated_children.append(new_agent)
 
     return mutated_children
@@ -228,7 +226,7 @@ def attention_crossover(agent1, agent2,record,num_attempts=25):
 
     return None
 
-def random_guided_crossover(Parents, record, total_crossovers=10,inherit=False):
+def random_guided_crossover(Parents, record, total_crossovers=10):
 
     offspring = []
     crossed_pairs = set()  
@@ -251,9 +249,8 @@ def random_guided_crossover(Parents, record, total_crossovers=10,inherit=False):
         if child is not None:
             new_agent = Agent(child)
            
-            if inherit:
-                partner_index = get_similar_index(new_agent, Parents)
-                new_agent.controller = Parents[partner_index].best_controller
+            partner_index = get_similar_index(new_agent, Parents)
+            new_agent.controller = copy.deepcopy(Parents[partner_index].best_controller)
             
             offspring.append(new_agent)
         

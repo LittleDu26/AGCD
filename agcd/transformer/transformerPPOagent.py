@@ -20,7 +20,6 @@ class TransformerPPOAC(nn.Module):
     ):
         super(TransformerPPOAC, self).__init__()
         self.sequence_size = sequence_size
-        # self.input_state = [None] * self.sequence_size
         self.other_feature_size = other_feature_size
         self.state_dim = modular_state_dim
         self.action_dim = modular_action_dim
@@ -69,16 +68,14 @@ class TransformerPPOAC(nn.Module):
     def forward(self, state, act=None, return_attention=False):
 
         # unzip observations
-        modular_state, other_state,act_mask,obs_padding,body = (
+        modular_state, other_state,act_mask,obs_padding = (
             state["modular"],
             state["other"],
             state["act_mask"],
             state["obs_mask"],
-            state["body"],
         )
         
         batch_size = modular_state.shape[0]
-        obs_coord=self.make_grid_coords(5)
         act_mask = act_mask.bool()
         obs_padding = obs_padding.bool()
         input_state = modular_state.reshape(batch_size, self.sequence_size, -1).permute(
@@ -86,17 +83,8 @@ class TransformerPPOAC(nn.Module):
         )
         # module_vals shape: (batch_size, num_modular * J)
         module_vals, v_attention_maps = self.v_net(
-            input_state, other_state, obs_padding, obs_coord,return_attention=return_attention
+            input_state, other_state, obs_padding, return_attention=return_attention
         )
-
-        # B, J, _ = module_vals.shape
-        # body_bj = body.expand(B, J)  # (B,J)
-        # m4 = (body_bj == 4)
-        # m3 = (body_bj == 3)
-
-        # values = torch.zeros((B, J), dtype=module_vals.dtype, device=module_vals.device)
-        # values[m4] = module_vals[..., 0][m4]
-        # values[m3] = module_vals[..., 1][m3]
 
         module_vals = module_vals * (1 - obs_padding.int())
         num_limbs = self.sequence_size - torch.sum(obs_padding.int(), dim=1, keepdim=True)
@@ -104,14 +92,9 @@ class TransformerPPOAC(nn.Module):
 
         # mu shape: (batch_size, num_modular * J)
         mu, mu_attention_maps = self.mu_net(
-            input_state,other_state, obs_padding, obs_coord,return_attention=return_attention
+            input_state,other_state, obs_padding, return_attention=return_attention
         )
         
-        # mu_out = torch.zeros((B, J), dtype=mu.dtype, device=mu.device)
-        # mu_out[m4] = mu[..., 0][m4]
-        # mu_out[m3] = mu[..., 1][m3]
-        # pi = self.act_dist(mu_out)
-
         pi = self.act_dist(mu)
 
         # In case next step is training
@@ -126,37 +109,20 @@ class TransformerPPOAC(nn.Module):
             return val, pi, logp, entropy
         else:
             if return_attention:
-                # attention_maps=v_attention_maps[0]*0.3+mu_attention_maps[0]*0.7
                 return val, pi, mu_attention_maps[0]
             else:
                 return val, pi, None
     
     def reset_seq_size(self,seq_size):
         self.sequence_size = seq_size
-        # self.input_state = [None] * self.sequence_size
         self.num_actions = seq_size
         self.mu_net.reset_seq_size(seq_size)
         self.v_net.reset_seq_size(seq_size)
-        if self.use_nca_vnet:
-            self.nca_v_net.reset_seq_size(seq_size) 
         
         if self.ppo_args.ACTION_STD_FIXED:
             self.act_dist = FixedDiagGaussian(num_outputs=self.num_actions, std=self.ppo_args.ACTION_STD)
         else:
             self.act_dist = DiagGaussian(num_outputs=self.num_actions)
-
-    def make_grid_coords(self,W, scale= 10.0, device=None):
-
-        x = torch.arange(1, W + 1, device=device)
-        y = torch.arange(1, W + 1, device=device)
-
-        xx, yy = torch.meshgrid(x, y, indexing='ij')
-
-        coords = torch.stack([xx.reshape(-1), yy.reshape(-1)],dim=1).float()
-
-        coords = coords / scale
-
-        return coords
 
 class PPOAgent(nn.Module):
     

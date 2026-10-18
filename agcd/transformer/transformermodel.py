@@ -1,3 +1,4 @@
+# Restored from ModularEvoGym transformer_ppo at fbc9b7d86f65001efd097ba28ad7f42542658a9e.
 import torch
 import math
 import torch
@@ -17,7 +18,7 @@ def make_mlp_default(dim_list, final_nonlinearity=True, nonlinearity="relu"):
     if not final_nonlinearity:
         layers.pop()
     return nn.Sequential(*layers)
-    
+
 class TransformerModel(nn.Module):
     # feature_size: dimension of input feature size
     # output_size: action dimension (normally 1)
@@ -46,6 +47,7 @@ class TransformerModel(nn.Module):
     ):
         """This model is built upon https://pytorch.org/tutorials/beginner/transformer_tutorial.html"""
         super(TransformerModel, self).__init__()
+
         self.args=args
         self.model_type = "Transformer"
         self.seq_len = sequence_size
@@ -60,36 +62,26 @@ class TransformerModel(nn.Module):
                 self.pos_embedding = PositionalEncoding(ninp, self.seq_len)
             elif self.args.POS_EMBEDDING == "abs":
                 self.pos_embedding = PositionalEncoding1D(ninp, self.seq_len)
-            elif self.args.POS_EMBEDDING == "abs2":
-                self.pos_embedding = PositionalEncoding2D(ninp, self.seq_len)
-            elif self.args.POS_EMBEDDING == "learnt2c":
-                self.pos_embedding = PositionalEncoding2C(ninp, self.seq_len)
-            elif self.args.POS_EMBEDDING == "learnt2_c":
-                self.pos_embedding = PositionalEncoding2_C(ninp, self.seq_len)
-            elif self.args.POS_EMBEDDING == "coord":
-                ninp-=2
-        
+            elif self.args.POS_EMBEDDING == "None":
+                pass
+
             # Transformer Encoder
-            encoder_layers = TransformerEncoderLayerResidual(self.ninp, nhead, nhid, dropout)
+            encoder_layers = TransformerEncoderLayerResidual(ninp, nhead, nhid, dropout)
 
             self.transformer_encoder = TransformerEncoder(
                 encoder_layers,
                 nlayers,
-                norm=nn.LayerNorm(self.ninp) if self.args.transformer_norm else None,
+                norm=nn.LayerNorm(ninp) if self.args.transformer_norm else None,
             )
 
         # Linear Projection for input features
-        if self.args.use_separate_pos_embedding:
-            self.encoderx = nn.Linear(feature_size//2, ninp//2)
-            self.encodery = nn.Linear(feature_size//2, ninp//2)
-        else:
-            self.encoder = nn.Linear(feature_size, ninp)
-
+        self.encoder = nn.Linear(feature_size, self.ninp)
         self.condition_decoder = self.args.condition_decoder
+
         # decoder
         if self.args.use_other_obs_encoder:
             hidden_dim = [32, other_feature_size]
-            # Task-related observation encoder  
+            # Task-related observation encoder
             self.other_info_encoder = MLPObsEncoder(other_feature_size, hidden_dim)
             self.decoder_input_dim += self.other_info_encoder.obs_feat_dim
         else:
@@ -107,33 +99,32 @@ class TransformerModel(nn.Module):
 
         self.init_weights()
 
+    def reset_seq_size(self, seq_size):
+        self.seq_len = seq_size
+        if self.use_transformer:
+            # Position embedding
+            if self.args.POS_EMBEDDING == "learnt":
+                self.pos_embedding = PositionalEncoding(self.ninp, self.seq_len)
+            elif self.args.POS_EMBEDDING == "abs":
+                self.pos_embedding = PositionalEncoding1D(self.ninp, self.seq_len)
+            elif self.args.POS_EMBEDDING == "None":
+                pass
+
     def init_weights(self):
         initrange = 0.1
-        if self.args.use_separate_pos_embedding:
-            self.encoderx.weight.data.uniform_(-initrange, initrange)
-            self.encodery.weight.data.uniform_(-initrange, initrange)
-        else:
-            self.encoder.weight.data.uniform_(-initrange, initrange)
+        self.encoder.weight.data.uniform_(-initrange, initrange)
         self.decoder[-2].bias.data.zero_()
         self.decoder[-2].weight.data.uniform_(-initrange, initrange)
 
-    def forward(self, modular_state, other_state,obs_mask,obs_coord,return_attention=False):
-        
+    def forward(self, modular_state, other_state,obs_mask,return_attention=False):
+
         # Linear Porjection of local observation
 
-        # (batch_size,num_modular, feature_size)
+        # (num_modular, batch_size, feature_size)
+        obs_embed = self.encoder(modular_state) * math.sqrt(self.ninp)
 
-        if self.args.use_separate_pos_embedding:
-            modular_state_x, modular_state_y = torch.chunk(modular_state, chunks=2, dim=-1)
-            obs_embed_x = self.encoderx(modular_state_x)
-            obs_embed_y = self.encodery(modular_state_y)
-            obs_embed = torch.cat([obs_embed_x,obs_embed_y],axis=2)* math.sqrt(self.ninp)
-        else:
-            # (batch_size,num_modular, ninp)
-            obs_embed = self.encoder(modular_state) * math.sqrt(self.ninp)
+        _, batch_size, _ = obs_embed.shape
 
-        _,batch_size, _ = obs_embed.shape
-        
         # Linear porjection of other observation
 
         if self.args.use_other_obs_encoder:
@@ -146,18 +137,14 @@ class TransformerModel(nn.Module):
         # (batch_size, embed_size x self.seq_len/num_modular)
         other_obs_embed = other_obs_embed.repeat(self.seq_len, 1)
         # (self.seq_len/num_modular, batch_size, other_feature_size)
-        other_obs_embed = other_obs_embed.reshape(self.seq_len,batch_size, -1)
+        other_obs_embed = other_obs_embed.reshape(self.seq_len, batch_size, -1)
 
         attention_maps = None
 
         if self.use_transformer:
-            # Position embedding
-            if self.args.POS_EMBEDDING == "coord":
-                obs_coord=obs_coord.repeat(batch_size,1)
-                obs_coord=obs_coord.reshape(self.seq_len,batch_size, -1)
-                obs_embed = torch.cat([obs_embed,obs_coord],axis=2)
-            else:
+            if self.args.POS_EMBEDDING in ["learnt", "abs"]:
                 obs_embed = self.pos_embedding(obs_embed)
+
             if return_attention:
                 obs_embed_t, attention_maps = self.transformer_encoder.get_attention_maps(
                     obs_embed, src_key_padding_mask=obs_mask)
@@ -165,6 +152,7 @@ class TransformerModel(nn.Module):
                 obs_embed_t = self.transformer_encoder(
                     obs_embed, src_key_padding_mask=obs_mask
                 )
+
             decoder_input = obs_embed_t
         else:
             decoder_input = obs_embed
@@ -173,18 +161,17 @@ class TransformerModel(nn.Module):
             decoder_input = torch.cat([decoder_input, other_obs_embed, modular_state], axis=2)
         else:
             decoder_input = torch.cat([decoder_input, other_obs_embed], axis=2)
-        
+
         output = self.decoder(decoder_input)
-        output = output.permute(1,0,2)
-        output = output.reshape(batch_size,-1)
-        # output = output.reshape(batch_size,num_modular,-1)
+        output = output.permute(1, 0, 2)
+        output = output.reshape(batch_size, -1)
         return output, attention_maps
 
 class PositionalEncoding(nn.Module):
     def __init__(self, d_model, seq_len, dropout=0.0):
         super().__init__()
         self.dropout = nn.Dropout(p=dropout)
-        self.pe = nn.Parameter(torch.randn(seq_len,1,d_model))
+        self.pe = nn.Parameter(torch.randn(seq_len, 1, d_model))
 
     def forward(self, x):
         """
@@ -192,103 +179,6 @@ class PositionalEncoding(nn.Module):
             x: Tensor, shape [seq_len, batch_size, embedding_dim]
         """
         x = x + self.pe
-        return self.dropout(x)
-    
-class PositionalEncoding2D(nn.Module):
-
-    def __init__(self, d_model, seq_len, dropout=0.0):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-        
-        h = int(math.sqrt(seq_len))
-        w = int(math.sqrt(seq_len))
-        d_model_half = d_model // 2
-        
-        div_term = torch.exp(torch.arange(0, d_model_half, 2) * (-math.log(10000.0) / d_model_half))
-        
-        pe = torch.zeros(h, w, d_model)
-        
-        y_pos = torch.arange(h).unsqueeze(1)
-        x_pos = torch.arange(w).unsqueeze(1)
-        
-        pe[:, :, 0:d_model_half:2] = torch.sin(y_pos * div_term).unsqueeze(1).repeat(1, w, 1)
-        pe[:, :, 1:d_model_half:2] = torch.cos(y_pos * div_term).unsqueeze(1).repeat(1, w, 1)
-        pe[:, :, d_model_half::2] = torch.sin(x_pos * div_term).unsqueeze(0).repeat(h, 1, 1)
-        pe[:, :, d_model_half+1::2] = torch.cos(x_pos * div_term).unsqueeze(0).repeat(h, 1, 1)
-        
-        pe = pe.view(seq_len,1, d_model)
-        self.register_buffer('pe', pe)
-
-    def forward(self, x):
-        """
-        Args:
-            x: Tensor, shape [batch_size, seq_len, embedding_dim]
-        """
-        x = x + self.pe
-        return self.dropout(x)
-
-class PositionalEncoding2_C(nn.Module):
-    def __init__(self, d_model, seq_len, dropout=0.0):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        self.h = int(math.sqrt(seq_len))
-        self.w = int(math.sqrt(seq_len))
-
-        self.x_embed = nn.Embedding(self.h, d_model//2)
-        self.y_embed = nn.Embedding(self.w, d_model//2)
-
-        
-        pos_x = torch.arange(self.h).unsqueeze(1).repeat(1, self.w).reshape(-1)  
-        pos_y = torch.arange(self.w).unsqueeze(0).repeat(self.h, 1).reshape(-1) 
-        self.register_buffer("pos_x", pos_x, persistent=False)
-        self.register_buffer("pos_y", pos_y, persistent=False)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.uniform_(self.x_embed.weight, -0.1, 0.1)
-        nn.init.uniform_(self.y_embed.weight, -0.1, 0.1)
-
-    def forward(self, x):
-        """
-        x: [L,B,D]
-        """
-        pe =torch.cat([self.x_embed(self.pos_x), self.y_embed(self.pos_y)], axis=1)
-        pe = pe.to(dtype=x.dtype)
-        x = x + pe.unsqueeze(1)
-        return self.dropout(x)
-
-class PositionalEncoding2C(nn.Module):
-    def __init__(self, d_model, seq_len, dropout=0.0):
-        super().__init__()
-        self.dropout = nn.Dropout(p=dropout)
-
-        self.h = int(math.sqrt(seq_len))
-        self.w = int(math.sqrt(seq_len))
-
-        self.x_embed = nn.Embedding(self.h, d_model)  
-        self.y_embed = nn.Embedding(self.w, d_model)  
-
-        
-        pos_x = torch.arange(self.h).unsqueeze(1).repeat(1, self.w).reshape(-1)  # [L]
-        pos_y = torch.arange(self.w).unsqueeze(0).repeat(self.h, 1).reshape(-1)  # [L]
-        self.register_buffer("pos_x", pos_x, persistent=False)
-        self.register_buffer("pos_y", pos_y, persistent=False)
-
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        nn.init.uniform_(self.x_embed.weight, -0.1, 0.1)
-        nn.init.uniform_(self.y_embed.weight, -0.1, 0.1)
-
-    def forward(self, x):
-        """
-        x: [L,B,D]
-        """
-        pe = self.x_embed(self.pos_x) + self.y_embed(self.pos_y)
-        pe = pe.to(dtype=x.dtype)
-        x = x + pe.unsqueeze(1)
         return self.dropout(x)
 
 class PositionalEncoding1D(nn.Module):

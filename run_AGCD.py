@@ -30,8 +30,6 @@ if __name__ == "__main__":
                         help='save_to')
     parser.add_argument('--use_attention', action='store_true',
                         help='use attention')
-    parser.add_argument('--inherit', action='store_true',
-                        help='')
     parser.add_argument('--use_mfp', action='store_true',
                         help='')
 
@@ -42,7 +40,6 @@ if __name__ == "__main__":
     args.pop_size = 20
     args.use_attention = True
     args.total_maturity = 25
-    args.inherit = True
     args.use_mfp = True
     env_list= ["Walker-v0","DownStepper-v0"]
     num=1
@@ -57,8 +54,6 @@ if __name__ == "__main__":
             temp_save_to += "_noA"
         if not args.use_mfp:
             temp_save_to += "_noM"
-        if not args.inherit:
-            temp_save_to += "_noI"
         for i in range(num):
             args.save_to=os.path.join(temp_save_to, str(i))
             if not os.path.exists(args.save_to):

@@ -1,13 +1,10 @@
-import torch
 class transformerconfig:
     def __init__(self) -> None:
-        self.POS_EMBEDDING = "learnt2_c"
+        self.POS_EMBEDDING = "learnt"
 
         self.use_other_obs_encoder = False
 
-        self.condition_decoder=False
-
-        self.use_separate_pos_embedding=True
+        self.condition_decoder=True
 
         self.attention_embedding_size=64
 

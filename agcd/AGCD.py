@@ -49,7 +49,7 @@ def single_agent_fit(agent, ppo_args, trans_args, sample_setting, args, signal):
     if reward_history[-1] > agent.fitness:
         agent.fitness = reward_history[-1]
         agent.attention = attention
-        agent.best_controller = copy.deepcopy(agent.controller)
+        agent.best_controller = ppo.best_controller
 
     agent.history_fitness += reward_history
     agent.maturity += len(reward_history)
@@ -138,7 +138,7 @@ def run(args):
     ppo_args = ppoconfig()
     ppo_args.env_name = args.env
     ppo_args.seed = args.seed
-    ppo_args.eval_interval = args.total_step // 100
+    ppo_args.eval_interval = max(1, args.total_step // 100)
 
     # 检查机器人
     structure_shape = (args.target_size, args.target_size)
@@ -218,12 +218,11 @@ def run(args):
         child_num = args.pop_size - len(Parents)
 
         # 交叉操作
-        crossover_children = random_guided_crossover(Parents, record, total_crossovers=child_num // 2,
-                                                     inherit=args.inherit)
+        crossover_children = random_guided_crossover(Parents, record, total_crossovers=child_num // 2)
 
         # 突变操作
         mutated_children = random_guided_mutate(Parents, record, total_mutations=child_num - len(crossover_children),
-                                                use_attention=args.use_attention, inherit=args.inherit)
+                                                use_attention=args.use_attention)
 
         logger.end_generation(pop_agent, crossover_children, mutated_children, Parents)
         # 合并

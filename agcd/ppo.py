@@ -8,6 +8,7 @@ from utils.algo_utils import Structure
 from .transformer.buffer import Buffer
 import gym
 import os
+import copy
 
 # PPO class
 class PPO:
@@ -17,6 +18,7 @@ class PPO:
         self.args = ppo_args
         self.verbose = verbose
         self.agent = agent
+        self.best_controller = None
         self.ppo_size = ppo_size
         self.robots = []
         self.train_iters = train_iters
@@ -107,6 +109,8 @@ class PPO:
                 if fitness>max_fitness:
                     best_attention=attention
                     max_fitness=fitness
+                    # Inheritance must use the weights that produced this fitness and attention.
+                    self.best_controller = copy.deepcopy(self.agent)
                     temp_path_controller = os.path.join(self.save_to, "controllers", f'{id}.pt')
                     torch.save([self.agent, getattr(helper.get_vec_normalize(self.envs), 'ob_rms', None)],temp_path_controller)
             if (i+1)%self.train_iters==0:
